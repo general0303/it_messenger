@@ -8,6 +8,9 @@ from init import db
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
+# для русского языка сделать
+# ALTER DATABASE messenger CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+# ALTER TABLE user CHANGE username username VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 class User(db.Model):
     """
     Таблица пользователя
@@ -79,7 +82,7 @@ class Chat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), index=True)
     users = db.relationship('User', secondary=user_chats, backref='chats')
-    posts = db.relationship('Post', backref='chat', lazy='dynamic')
+    posts = db.relationship('Message', backref='chat', lazy='dynamic')
     invitations = db.relationship('Invitation', backref='chat', lazy='dynamic')
     image = db.Column(db.String(64), default=None)
 
