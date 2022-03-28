@@ -141,6 +141,6 @@ def method_message(message_id):
 @app.route('/chats/<chat_id>/messages')
 def chat_messages(chat_id):
     chat = Chat.query.get(chat_id)
-    data = [{'author': {'username': message.author.username}, 'body': message.body, 'timestamp': message.timestamp}
+    data = [{'id': message.id, 'author': {'username': message.author.username}, 'body': message.body, 'timestamp': message.timestamp}
             for message in chat.posts]
     return jsonify(data)

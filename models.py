@@ -18,7 +18,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), index=True, unique=True)
     email = db.Column(db.String(120), index=True, unique=True)
-    password_hash = db.Column(db.String(128))
+    password = db.Column(db.String(128))
     messages = db.relationship('Message', backref='author', lazy='dynamic')
     invitations = db.relationship('Invitation', backref='user', lazy='dynamic')
     last_seen = db.Column(db.DateTime, default=datetime.now(pytz.timezone('Europe/Moscow')))
@@ -33,7 +33,7 @@ class User(db.Model):
         :type password: строка
         :return: ничего не возвращает
         """
-        self.password_hash = generate_password_hash(password)
+        self.password = generate_password_hash(password)
 
     def check_password(self, password):
         """
