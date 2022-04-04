@@ -1,9 +1,27 @@
 # -*- coding: utf-8 -*-
-from flask import request, jsonify
+from flask import request, jsonify, abort
 
 from init import db, app
 from models import User, Message, Attachment, Invitation, Chat
 from datetime import datetime
+from flask_jwt_extended import create_access_token, jwt_required, current_user
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = str(request.form['username'])
+    password = str(request.form['password'])
+    user = User.query.filter_by(username=username).first()
+    if user is None:
+        abort(400)
+    elif user.check_password(password):
+        access_token = create_access_token(identity={
+                'id': user.id,
+            }, expires_delta=False)
+        result = {'token': access_token}
+        return result
+    else:
+        abort(400)
 
 
 @app.route('/registration', methods=['POST'])
@@ -15,10 +33,16 @@ def registration():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
-    return 'Created', 201
+    user = User.query.filter_by(username=username).first()
+    access_token = create_access_token(identity={
+        'id': user.id,
+    }, expires_delta=False)
+    result = {'token': access_token}
+    return result
 
 
 @app.route('/users/<user_id>', methods=['GET', 'PUT'])
+@jwt_required()
 def method_user(user_id):
     user = User.query.get(user_id)
     if request.method == 'GET':
@@ -35,22 +59,41 @@ def method_user(user_id):
         return 'Updated', 200
 
 
+@app.route('/current_user')
+@jwt_required()
+def get_current_user():
+    user = current_user
+    data = {'username': user.username, 'email': user.email, 'last_seen': user.last_seen,
+            'chats': [{'chat_id': chat.id, 'chat_name': chat.name, 'chat_image': chat.image} for chat in user.chats]}
+    return jsonify(data)
+
+
 @app.route('/chat', methods=['POST'])
+@jwt_required()
 def create_chat():
     name = str(request.form['name'])
     chat = Chat(name=name)
+    chat.users.append(current_user)
     db.session.add(chat)
     db.session.commit()
     return 'Created', 201
 
 
-@app.route('/chats/<chat_id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/chats/<chat_id>', methods=['GET'])
+@jwt_required()
+def get_chat(chat_id):
+    chat = Chat.query.get(chat_id)
+    data = {'name': chat.name, 'image': chat.image}
+    return jsonify(data)
+
+
+@app.route('/chats/<chat_id>', methods=['PUT', 'DELETE'])
+@jwt_required()
 def method_chat(chat_id):
     chat = Chat.query.get(chat_id)
-    if request.method == 'GET':
-        data = {'name': chat.name, 'image': chat.image}
-        return jsonify(data)
-    elif request.method == 'PUT':
+    if current_user != chat.admin:
+        abort(403)
+    if request.method == 'PUT':
         name = str(request.form['name'])
         chat.name = name
         db.session.commit()
@@ -62,6 +105,7 @@ def method_chat(chat_id):
 
 
 @app.route('/invitation', methods=['POST'])
+@jwt_required()
 def create_invitation():
     user_id = str(request.form['user_id'])
     chat_id = str(request.form['chat_id'])
@@ -76,6 +120,7 @@ def create_invitation():
 
 
 @app.route('/accept_the_invitation/<invitation_id>')
+@jwt_required()
 def accept_the_invitation(invitation_id):
     invitation = Invitation.query.get(int(invitation_id))
     invitation.user.chats.append(invitation.chat)
@@ -85,6 +130,7 @@ def accept_the_invitation(invitation_id):
 
 
 @app.route('/decline_the_invitation/<invitation_id>')
+@jwt_required()
 def decline_the_invitation(invitation_id):
     invitation = Invitation.query.get(invitation_id)
     db.session.delete(invitation)
@@ -93,6 +139,7 @@ def decline_the_invitation(invitation_id):
 
 
 @app.route('/users/<user_id>/chats')
+@jwt_required()
 def user_chat(user_id):
     user = User.query.get(user_id)
     data = [{'chat_id': chat.id, 'chat_name': chat.name, 'chat_image': chat.image} for chat in user.chats]
@@ -100,6 +147,7 @@ def user_chat(user_id):
 
 
 @app.route('/chats/<chat_id>/users')
+@jwt_required()
 def chat_user(chat_id):
     chat = Chat.query.get(chat_id)
     data = [{'user_id': user.id, 'username': user.username} for user in chat.users]
@@ -107,6 +155,7 @@ def chat_user(chat_id):
 
 
 @app.route('/chats/<chat_id>/message', methods=['POST'])
+@jwt_required()
 def write_message(chat_id):
     user_id = str(request.form['user_id'])
     chat = Chat.query.get(chat_id)
@@ -122,25 +171,30 @@ def write_message(chat_id):
 
 
 @app.route('/messages/<message_id>', methods=['GET', 'PUT', 'DELETE'])
+@jwt_required()
 def method_message(message_id):
     message = Message.query.get(message_id)
     if request.method == 'GET':
         data = {'author': {'username': message.author.username}, 'body': message.body, 'timestamp': message.timestamp}
         return jsonify(data)
     elif request.method == 'PUT':
-        body = str(request.form['body'])
-        message.body = body
-        db.session.commit()
+        if current_user == message.author:
+            body = str(request.form['body'])
+            message.body = body
+            db.session.commit()
         return 'Updated', 200
     else:
-        db.session.delete(message)
-        db.session.commit()
+        if current_user == message.author:
+            db.session.delete(message)
+            db.session.commit()
         return 'Deleted', 204
 
 
 @app.route('/chats/<chat_id>/messages')
+@jwt_required()
 def chat_messages(chat_id):
     chat = Chat.query.get(chat_id)
-    data = [{'id': message.id, 'author': {'username': message.author.username}, 'body': message.body, 'timestamp': message.timestamp}
+    data = [{'id': message.id, 'author': {'username': message.author.username}, 'body': message.body,
+             'timestamp': message.timestamp}
             for message in chat.posts]
     return jsonify(data)

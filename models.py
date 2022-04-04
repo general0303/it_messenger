@@ -4,7 +4,7 @@
 
 import pytz
 from datetime import datetime
-from init import db
+from init import db, jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -20,6 +20,7 @@ class User(db.Model):
     email = db.Column(db.String(120), index=True, unique=True)
     password = db.Column(db.String(128))
     messages = db.relationship('Message', backref='author', lazy='dynamic')
+    admin_chats = db.relationship('Chat', backref='admin', lazy='dynamic')
     invitations = db.relationship('Invitation', backref='user', lazy='dynamic')
     last_seen = db.Column(db.DateTime, default=datetime.now(pytz.timezone('Europe/Moscow')))
 
@@ -42,7 +43,12 @@ class User(db.Model):
         :type password: строка
         :return: True или False
         """
-        return check_password_hash(self.password_hash, password)
+        return check_password_hash(self.password, password)
+
+    @jwt.user_lookup_loader
+    def user_lookup_callback(_jwt_header, jwt_data):
+        identity = jwt_data["sub"]
+        return User.query.filter_by(id=identity['id']).one_or_none()
 
 
 class Message(db.Model):
@@ -85,6 +91,7 @@ class Chat(db.Model):
     posts = db.relationship('Message', backref='chat', lazy='dynamic')
     invitations = db.relationship('Invitation', backref='chat', lazy='dynamic')
     image = db.Column(db.String(64), default=None)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
 
 class Attachment(db.Model):
