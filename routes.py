@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
+import os
+
 from flask import request, jsonify, abort
+from werkzeug.utils import secure_filename
 
 from init import db, app
 from models import User, Message, Attachment, Invitation, Chat
@@ -18,9 +21,9 @@ def login():
         access_token = create_access_token(identity={
             'id': user.id,
         }, expires_delta=False)
-        result = {'token': access_token}
         user.last_seen = datetime.now()
         db.session.commit()
+        result = {'token': access_token, 'id': user.id}
         return result
     else:
         abort(400)
@@ -80,13 +83,22 @@ def get_current_user():
 @app.route('/chat', methods=['POST'])
 @jwt_required()
 def create_chat():
-    name = str(request.form['name'])
-    chat = Chat(name=name)
+    name = request.form['name']
+    image = None
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename != "":
+            filename = f'chat_{name}_image.{file.filename.rsplit(".", 1)[1].lower()}'
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            image = filename
+    chat = Chat(name=name, image=image)
     chat.users.append(current_user)
+    chat.admin = current_user
     db.session.add(chat)
     current_user.last_seen = datetime.now()
     db.session.commit()
-    return 'Created', 201
+    chat = Chat.query.filter_by(name=name).first()
+    return {'chat_id': chat.id}, 201
 
 
 @app.route('/chats/<chat_id>', methods=['GET'])
