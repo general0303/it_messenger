@@ -103,8 +103,8 @@ def create_chat():
             os.mkdir(path)
             filename = f'image.{file.filename.rsplit(".", 1)[1].lower()}'
             file.save(os.path.join(path, filename))
-            image = f'{path}/{filename}'
-            chat.image = image[2:].replace(r'\c', '/c')
+            chat_image = f'{path}/{filename}'
+            chat.image = chat_image[2:].replace(r'\c', '/c')
             db.session.commit()
     return {'chat_id': chat.id}, 201
 
