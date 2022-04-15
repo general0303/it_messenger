@@ -74,6 +74,12 @@ def get_current_user():
             'chats': [{'chat_id': chat.id, 'chat_name': chat.name, 'chat_image': chat.image, 'admin':
                 {'username': chat.admin.username, 'email': chat.admin.email, 'last_seen': chat.admin.last_seen}}
                       for chat in user.chats]}
+    invites = []
+    for invite in current_user.invitations:
+        chat = Chat.query.get(invite.chat_id)
+        invites.append({'invite_id': invite.id, 'chat_id': chat.id, 'chat_name': chat.name, 'chat_image': chat.image, 'admin':
+                {'username': chat.admin.username, 'email': chat.admin.email, 'last_seen': chat.admin.last_seen}})
+    data['invites'] = invites
     current_user.last_seen = datetime.now()
     db.session.commit()
     return jsonify(data)
