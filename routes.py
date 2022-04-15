@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 
-from flask import request, jsonify, abort
-from werkzeug.utils import secure_filename
+from flask import request, jsonify, abort, send_file
 
 from init import db, app
 from models import User, Message, Attachment, Invitation, Chat
@@ -84,20 +83,23 @@ def get_current_user():
 @jwt_required()
 def create_chat():
     name = request.form['name']
-    image = None
-    if 'file' in request.files:
-        file = request.files['file']
-        if file.filename != "":
-            filename = f'chat_{name}_image.{file.filename.rsplit(".", 1)[1].lower()}'
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            image = filename
-    chat = Chat(name=name, image=image)
+    chat = Chat(name=name)
     chat.users.append(current_user)
     chat.admin = current_user
     db.session.add(chat)
     current_user.last_seen = datetime.now()
     db.session.commit()
     chat = Chat.query.filter_by(name=name).first()
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename != "":
+            path = os.path.join(app.config['UPLOAD_FOLDER'], f'chats/{chat.id}')
+            os.mkdir(path)
+            filename = f'image.{file.filename.rsplit(".", 1)[1].lower()}'
+            file.save(os.path.join(path, filename))
+            image = f'{path}/{filename}'
+            chat.image = image[2:].replace(r'\c', '/c')
+            db.session.commit()
     return {'chat_id': chat.id}, 201
 
 
@@ -244,3 +246,9 @@ def chat_messages(chat_id):
     current_user.last_seen = datetime.now()
     db.session.commit()
     return jsonify(data)
+
+
+@app.route('/static/chats/<chat_id>/image.png')
+def image(chat_id):
+    path = f'/static/chats/{chat_id}/image.png'
+    return send_file(path, mimetype='image/png')
